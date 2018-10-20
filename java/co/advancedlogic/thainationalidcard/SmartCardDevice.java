@@ -183,6 +183,10 @@ public final class SmartCardDevice {
         this.havePermission = false;
     }
 
+    public boolean isStarted() {
+        return !this.stopped;
+    }
+
     //public void setMessageTypeT1(boolean isT1) {
     //    this.message.setMessageTypeT1(isT1);
     //}
