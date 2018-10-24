@@ -34,6 +34,7 @@ public final class SmartCardDevice {
     private int endpointInputIndex = 0;
     private int endpointOutputIndex = 0;
     private boolean stopped = true;
+    private boolean started = false;
     private boolean deviceDetachedRegister = false;
 
     private SmartCardDeviceEvent eventCallback = null;
@@ -167,7 +168,13 @@ public final class SmartCardDevice {
 
     public void start() {
         UsbManager manager = (UsbManager)this.context.getSystemService(Context.USB_SERVICE);
+        if (this.started) {
+            return;
+        }
+        this.started = true;
+
         if (manager != null) {
+            Log.d(TAG, "Start request permission");
             manager.requestPermission(device, mPermissionIntent);
         } else {
             throw new RuntimeException("USB manager not found");
@@ -179,12 +186,69 @@ public final class SmartCardDevice {
             //this.deviceConnection.close();
             this.stopped = true;
         }
+        this.started = false;
 
         this.havePermission = false;
     }
 
+    public boolean reset() {
+        SmartCardMessage.DataBlock dataBlock;
+        byte[] data;
+        byte[] message = this.message.getMessageSlotReset();
+
+        if (this.havePermission) {
+            if (!this.prepareConnection()) {
+                Log.w(TAG, "prepareConnection() failed");
+                return false;
+            }
+
+            if (!this.sendRequestMessage(message)) {
+                Log.w(TAG, "sendRequestMessage() error");
+                return false;
+            }
+
+            try {
+                if ((data = this.receiveResponseMessage()) == null) {
+                    Log.w(TAG, "receiveResponseMessage() error");
+                    return false;
+                }
+            } catch (IOException e) {
+                Log.w(TAG, "receiveResponseMessage() failed");
+                return false;
+            }
+
+            dataBlock = this.message.parseDataBlock(data);
+            if (dataBlock != null && dataBlock.data != null) {
+                StringBuilder sb = new StringBuilder();
+
+                for (byte b: dataBlock.data) {
+                    sb.append(String.format("%02x", b));
+                }
+
+                Log.d(TAG, "Card reset response data[" + sb.toString() + "]");
+
+                if (dataBlock.status != 0 || dataBlock.error != 0) {
+                    Log.w(TAG, "Card reset return abnormal status " + dataBlock.status + ":" + dataBlock.error);
+                    return false;
+                }
+
+                if (dataBlock.data[0] != (byte)0x82) {
+                    Log.w(TAG, String.format("Card reset return abnormal code 0x%02x", dataBlock.data[0]));
+                    return false;
+                }
+
+                return true;
+            } else {
+                Log.w(TAG, "Card reset return fail");
+                return false;
+            }
+        }
+
+        return false;
+    }
+
     public boolean isStarted() {
-        return !this.stopped;
+        return !this.started;
     }
 
     //public void setMessageTypeT1(boolean isT1) {
@@ -198,6 +262,7 @@ public final class SmartCardDevice {
             UsbManager manager;
 
             if (ACTION_USB_PERMISSION.equals(action)) {
+                Log.d(TAG, "USB permission broadcast received");
                 synchronized (this) {
                     UsbDevice device = (UsbDevice)intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
 
@@ -333,7 +398,18 @@ public final class SmartCardDevice {
             return null;
         }
 
-        return this.message.parseDataBlock(data);
+        SmartCardMessage.DataBlock dataBlock = this.message.parseDataBlock(data);
+        if (dataBlock != null && dataBlock.data != null) {
+            StringBuilder sb = new StringBuilder();
+
+            for (byte b: dataBlock.data) {
+                sb.append(String.format("%02x", b));
+            }
+
+            Log.d(TAG, "Response data[" + sb.toString() + "]");
+        }
+
+        return dataBlock;
     }
 
     private boolean prepareConnection() {

@@ -71,7 +71,7 @@ public final class ThaiSmartCard {
 
         dataRequestMessage[4] = data.data[1];
 
-        if ((data = this.device.sendAPDU(requestMessage)) == null) {
+        if ((data = this.device.sendAPDU(dataRequestMessage)) == null) {
             Log.w(TAG, "APDU body request fail");
             return null;
         }
@@ -80,24 +80,24 @@ public final class ThaiSmartCard {
     }
 
     private boolean selectAppletChipData() {
-        byte[] requestMessage = new byte[]{(byte)0x00, (byte)0xa4, (byte)0x04, (byte)0x00};
+        byte[] message = new byte[]{(byte)0x00, (byte)0xa4, (byte)0x04, (byte)0x00};
         SmartCardMessage.DataBlock data;
 
-        return ((data = this.getCardData(requestMessage)) != null && data.status == 0 && data.error == 0);
+        return ((data = this.getCardData(message)) != null && data.status == 0 && data.error == 0);
     }
 
     private boolean selectAppletStorageData() {
-        byte[] requestMessage = new byte[]{(byte)0x00, (byte)0xa4, (byte)0x04, (byte)0x00, (byte)0x08, (byte)0xa0, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x54, (byte)0x48, (byte)0x00, (byte)0x01};
+        byte[] message = new byte[]{(byte)0x00, (byte)0xa4, (byte)0x04, (byte)0x00, (byte)0x08, (byte)0xa0, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x54, (byte)0x48, (byte)0x00, (byte)0x01};
         SmartCardMessage.DataBlock data;
 
-        return ((data = this.getCardData(requestMessage)) != null && data.status == 0 && data.error == 0);
+        return ((data = this.getCardData(message)) != null && data.status == 0 && data.error == 0);
     }
 
     private boolean selectAppletExtension() {
-        byte[] requestMessage = new byte[]{(byte)0x00, (byte)0xa4, (byte)0x04, (byte)0x00, (byte)0x08, (byte)0xa0, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x84, (byte)0x06, (byte)0x00, (byte)0x02};
+        byte[] message = new byte[]{(byte)0x00, (byte)0xa4, (byte)0x04, (byte)0x00, (byte)0x08, (byte)0xa0, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x84, (byte)0x06, (byte)0x00, (byte)0x02};
         SmartCardMessage.DataBlock data;
 
-        return ((data = this.getCardData(requestMessage)) != null && data.status == 0 && data.error == 0);
+        return ((data = this.getCardData(message)) != null && data.status == 0 && data.error == 0);
     }
 
     private String byteArrayToHexString(byte[] input) {
@@ -145,7 +145,7 @@ public final class ThaiSmartCard {
             return null;
         }
 
-        if (data.status != 0 || data.error != 0 || data.data.length != 45) {
+        if (data.status != 0 || data.error != 0 || data.data.length != 45 + 2) {
             Log.w(TAG, String.format("Invalid chip card information [%d][%d][%d][%s]", data.status, data.error, data.data.length, this.byteArrayToHexString(data.data)));
             return null;
         }
@@ -187,7 +187,7 @@ public final class ThaiSmartCard {
             return null;
         }
 
-        if (data.status != 0 || data.error != 0 || data.data.length != 0xff) {
+        if (data.status != 0 || data.error != 0 || data.data.length != 0xff + 2) {
             Log.w(TAG, String.format("Invalid personal information block 1-1 [%d][%d][%d][%s]", data.status, data.error, data.data.length, this.byteArrayToHexString(data.data)));
             return null;
         }
@@ -199,7 +199,7 @@ public final class ThaiSmartCard {
             return null;
         }
 
-        if (data.status != 0 || data.error != 0 || data.data.length != 0x7a) {
+        if (data.status != 0 || data.error != 0 || data.data.length != 0x7a + 2) {
             Log.w(TAG, String.format("Invalid personal information block 1-2 [%d][%d][%d][%s]", data.status, data.error, data.data.length, this.byteArrayToHexString(data.data)));
             return null;
         }
@@ -211,7 +211,7 @@ public final class ThaiSmartCard {
             return null;
         }
 
-        if (data.status != 0 || data.error != 0 || data.data.length != 0xae) {
+        if (data.status != 0 || data.error != 0 || data.data.length != 0xae + 2) {
             Log.w(TAG, String.format("Invalid personal information block 2 [%d][%d][%d][%s]", data.status, data.error, data.data.length, this.byteArrayToHexString(data.data)));
             return null;
         }
@@ -318,7 +318,7 @@ public final class ThaiSmartCard {
             return null;
         }
 
-        if (data.status != 0 || data.error != 0 || data.data.length != 0x17) {
+        if (data.status != 0 || data.error != 0 || data.data.length != 0x17 + 2) {
             Log.w(TAG, String.format("Invalid card ADM response [%d][%d][%d][%s]", data.status, data.error, data.data.length, this.byteArrayToHexString(data.data)));
             return null;
         }
@@ -365,17 +365,12 @@ public final class ThaiSmartCard {
                 return null;
             }
 
-            if (data.data.length != blockLength) {
-                Log.w(TAG, "Get personal picture block [" + blockNumber + "] return invalid length [ " + data.data.length + "/" + blockLength + "]");
+            if (data.data.length != blockLength + 2) {
+                Log.w(TAG, "Get personal picture block [" + blockNumber + "] return invalid length [" + data.data.length + "/" + blockLength + "]");
                 return null;
             }
 
-            try {
-                buffer.write(data.data);
-            } catch (IOException e) {
-                Log.w(TAG, "Get personal picture block [" + blockNumber + "] append to buffer failed");
-                return null;
-            }
+            buffer.write(data.data, 0, blockLength);
 
             offset += blockLength;
             index += blockLength;
@@ -418,7 +413,7 @@ public final class ThaiSmartCard {
             return false;
         }
 
-        if (data.data.length != 32) {
+        if (data.data.length != 0x20 + 2) {
             Log.w(TAG, String.format("Invalid pin challenge length [%d]", data.data.length));
             return false;
         }
@@ -432,8 +427,8 @@ public final class ThaiSmartCard {
                 (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00,
                 (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00};
 
-        if ((data = this.getCardData(message)) == null) {
-            Log.w(TAG, "Get pin challenge failed");
+        if ((data = this.device.sendAPDU(message)) == null) {
+            Log.w(TAG, "Get pin verify failed");
             return false;
         }
 

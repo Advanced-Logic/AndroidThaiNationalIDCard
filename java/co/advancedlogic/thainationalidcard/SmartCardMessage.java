@@ -89,6 +89,14 @@ public final class SmartCardMessage {
         return message;
     }
 
+    public byte[] getMessageSlotReset() {
+        byte[] message = new byte[10];
+
+        this.initProperties(message,0x6d);
+
+        return message;
+    }
+
     public byte[][] getMessageXfrBlock(byte[] data) {
         byte[][] messages;
         byte[] block, dataTmp;
