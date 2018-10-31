@@ -2,17 +2,22 @@ package co.advancedlogic.thainationalidcard;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.AsyncTask;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
-import java.nio.charset.Charset;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.ProtocolException;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.Locale;
 
 public final class ThaiSmartCard {
-    private final String TAG = "ThaiSmartCard";
+    private static final String TAG = "ThaiSmartCard";
 
     private SmartCardDevice device;
 
@@ -128,6 +133,16 @@ public final class ThaiSmartCard {
         System.arraycopy(input, index, selectBytes, 0, length);
 
         return this.byteArrayToHexString(selectBytes);
+    }
+
+    private byte[] hexStringToByteArray(String hex) {
+        int len = hex.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4) + Character.digit(hex.charAt(i+1), 16));
+        }
+
+        return data;
     }
 
     public String getCardID() {
@@ -384,16 +399,133 @@ public final class ThaiSmartCard {
         return BitmapFactory.decodeByteArray(pictureBuffer, 0, index);
     }
 
-    public boolean verifyPinCode(String pin) {
+    private abstract class SimpleRequest {
+        String url;
+        String response = null;
+
+        SimpleRequest(String url) {
+            this.url = url;
+        }
+
+        abstract void onResponse(String response);
+        abstract void onError();
+    }
+
+    public static class SimpleGetRequestAsync extends AsyncTask<SimpleRequest, Void, SimpleRequest> {
+
+        @Override
+        protected SimpleRequest doInBackground(SimpleRequest... requests) {
+            if (requests[0] == null) {
+                return null;
+            }
+
+            SimpleRequest request = requests[0];
+
+            URL url;
+            try {
+                url = new URL(request.url);
+            } catch (MalformedURLException e) {
+                Log.w(TAG, "Invalid parsing url: " + request.url);
+                return null;
+            }
+
+            HttpURLConnection connection;
+            try {
+                connection = (HttpURLConnection)url.openConnection();
+            } catch (IOException e) {
+                Log.w(TAG, "Cannot open connection url: " + request.url);
+                return null;
+            }
+
+            try {
+                connection.setRequestMethod("GET");
+            } catch (ProtocolException e) {
+                Log.w(TAG, "Cannot set method GET to url: " + request.url);
+                return null;
+            }
+
+            connection.setUseCaches(false);
+            connection.setDoInput(true);
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+
+            // special header for call service
+            connection.setRequestProperty("X-User-Service", "Thai-SmartCard-Helper");
+
+            try {
+                connection.connect();
+            } catch (IOException e) {
+                Log.w(TAG, "Cannot connect url: " + request.url);
+                return null;
+            }
+
+            byte[] responseBuffer = null;
+
+            try {
+                if (connection.getResponseCode() == 200) {
+                    InputStream is = connection.getInputStream();
+                    byte[] newBuffer = new byte[4096];
+                    int length;
+                    ByteArrayOutputStream outStream = new ByteArrayOutputStream();
+
+                    while ((length = is.read(newBuffer)) != -1) {
+                        outStream.write(newBuffer, 0, length);
+                    }
+
+                    responseBuffer = outStream.toByteArray();
+                } else {
+                    Log.w(TAG, "Response code: " + connection.getResponseCode());
+                    connection.disconnect();
+                    return null;
+                }
+            } catch (IOException e) {
+                Log.w(TAG, "Cannot get response: " + request.url);
+                connection.disconnect();
+                return null;
+            }
+
+            connection.disconnect();
+
+            request.response = new String(responseBuffer);
+
+            return request;
+        }
+
+        @Override
+        protected void onPostExecute(SimpleRequest request) {
+            super.onPostExecute(request);
+
+            String response;
+
+            if (request != null) {
+                if (request.response != null) {
+                    response = request.response;
+
+                    request.onResponse(response);
+                } else {
+                    Log.d(TAG, "Response not found");
+                    request.onError();
+                }
+            } else {
+                Log.d(TAG, "Invalid request task");
+            }
+        }
+    }
+
+    public interface VerifyPinCallback {
+        void onSuccess();
+        void onFailed(int remain);
+        void onError();
+    }
+
+    public boolean verifyPinCode(String pin, final VerifyPinCallback verifyPinCallback) {
         SmartCardMessage.DataBlock data;
-        byte[] message, pinBuffer, challengeBuffer;
+        byte[] message;
 
         if (pin == null || pin.length() != 4) {
             Log.w(TAG, "Invalid pin code");
             return false;
         }
-
-        pinBuffer = pin.getBytes(Charset.forName("TIS620"));
 
         if (!this.selectAppletExtension()) {
             Log.d(TAG, "selectAppletExtension fail");
@@ -418,33 +550,61 @@ public final class ThaiSmartCard {
             return false;
         }
 
-        // TODO: calculate pin challenge response
+        // using public server for generate challenge response data
+        String requestUrl = String.format("https://raspberrypihobby.com/validate_pin?pin=%s&challenge=%s", pin, this.byteArrayToHexString(data.data).substring(0, 64));
+        Log.d(TAG, "Request url: [" + requestUrl + "]");
 
-        // verify pin
-        message = new byte[]{(byte)0x80, (byte)0x20, (byte)0x01, (byte)0x00, (byte)0x20,
-                (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00,
-                (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00,
-                (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00,
-                (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00};
+        new SimpleGetRequestAsync().execute(new SimpleRequest(requestUrl) {
+            @Override
+            void onResponse(String response) {
+                SmartCardMessage.DataBlock data;
+                byte[] challengeResponse, message;
 
-        if ((data = this.device.sendAPDU(message)) == null) {
-            Log.w(TAG, "Get pin verify failed");
-            return false;
-        }
+                if (response.length() == 64) {
+                    challengeResponse = ThaiSmartCard.this.hexStringToByteArray(response);
 
-        if (data.status != 0 || data.error != 0) {
-            Log.w(TAG, String.format("Invalid verify pin response [%d][%d][%d][%s]", data.status, data.error, data.data.length, this.byteArrayToHexString(data.data)));
-            return false;
-        }
+                    message = new byte[]{(byte)0x80, (byte)0x20, (byte)0x01, (byte)0x00, (byte)0x20,
+                            (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00,
+                            (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00,
+                            (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00,
+                            (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00};
 
-        if (data.data[0] == (byte)0x63) {
-            Log.w(TAG, String.format("PIN verify incorrect, remaining [%d]", data.data[1]));
-            return false;
-        } else if (data.data[0] == (byte)0x90) {
-            return true;
-        } else {
-            Log.w(TAG, String.format("Invalid verify pin response data [%d][%s]", data.data.length, this.byteArrayToHexString(data.data)));
-            return false;
-        }
+                    System.arraycopy(challengeResponse, 0, message, 5, challengeResponse.length);
+
+                    if ((data = ThaiSmartCard.this.device.sendAPDU(message)) == null) {
+                        Log.w(TAG, "Get pin verify failed");
+                        verifyPinCallback.onError();
+                        return;
+                    }
+
+                    if (data.status != 0 || data.error != 0) {
+                        Log.w(TAG, String.format("Invalid verify pin response [%d][%d][%d][%s]", data.status, data.error, data.data.length, ThaiSmartCard.this.byteArrayToHexString(data.data)));
+                        verifyPinCallback.onError();
+                        return;
+                    }
+
+                    if (data.data[0] == (byte)0x63) {
+                        Log.w(TAG, String.format("PIN verify incorrect, remaining [%d]", data.data[1]));
+                        verifyPinCallback.onFailed(data.data[1]);
+                    } else if (data.data[0] == (byte)0x90) {
+                        verifyPinCallback.onSuccess();
+                    } else {
+                        Log.w(TAG, String.format("Invalid verify pin response data [%d][%s]", data.data.length, ThaiSmartCard.this.byteArrayToHexString(data.data)));
+                        verifyPinCallback.onError();
+                    }
+                } else {
+                    Log.w(TAG, "Challenge generate invalid length: " + response.length());
+                    verifyPinCallback.onError();
+                }
+            }
+
+            @Override
+            void onError() {
+                Log.w(TAG, "SimpleRequest on error");
+                verifyPinCallback.onError();
+            }
+        });
+
+        return true;
     }
 }
