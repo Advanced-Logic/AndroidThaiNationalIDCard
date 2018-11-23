@@ -14,6 +14,8 @@ import java.net.MalformedURLException;
 import java.net.ProtocolException;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Locale;
 
 public final class ThaiSmartCard {
@@ -100,6 +102,13 @@ public final class ThaiSmartCard {
 
     private boolean selectAppletExtension() {
         byte[] message = new byte[]{(byte)0x00, (byte)0xa4, (byte)0x04, (byte)0x00, (byte)0x08, (byte)0xa0, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x84, (byte)0x06, (byte)0x00, (byte)0x02};
+        SmartCardMessage.DataBlock data;
+
+        return ((data = this.getCardData(message)) != null && data.status == 0 && data.error == 0);
+    }
+
+    private boolean selectAppletBio() {
+        byte[] message = new byte[]{(byte)0x00, (byte)0xa4, (byte)0x04, (byte)0x00, (byte)0x08, (byte)0xa0, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x84, (byte)0x06, (byte)0x00, (byte)0x00};
         SmartCardMessage.DataBlock data;
 
         return ((data = this.getCardData(message)) != null && data.status == 0 && data.error == 0);
@@ -607,4 +616,94 @@ public final class ThaiSmartCard {
 
         return true;
     }
+
+    public enum  VerifyResult {
+        NOT_ALLOW(-2),
+        ERROR(-1),
+        SUCCESS(0),
+        TIMEOUT(1);
+
+        private final int value;
+        VerifyResult(int value) { this.value = value; }
+        public int getValue() { return this.value; }
+    }
+
+    public VerifyResult verifyFingerPrint(int maxRetry) {
+        int i = 0;
+        SmartCardMessage.DataBlock data;
+        SmartCardMessage.EscapeResponseBlock escape;
+
+        // test on precise 200-250 MC only
+        if (!this.device.getDeviceProductName().contains("Precise")) {
+            return VerifyResult.NOT_ALLOW;
+        }
+
+        if (!this.selectAppletBio()) {
+            Log.d(TAG, "selectAppletBio fail");
+            return VerifyResult.ERROR;
+        }
+
+        // get fingerprint parameter
+        byte[] message = new byte[]{(byte)0xb0, (byte)0x34, (byte)0x00, (byte)0x76};
+
+        if ((data = this.device.sendAPDU(message)) == null) {
+            Log.w(TAG, "APDU get fingerprint parameter failed");
+            return VerifyResult.ERROR;
+        }
+
+        if (data.error != 0 || data.status != 0) {
+            Log.w(TAG, "APDU get fingerprint parameter return abnormal status [" + data.status + ":" + data.error + "]");
+            return VerifyResult.ERROR;
+        }
+
+        if (data.data == null || data.data.length != 0x78) {
+            Log.w(TAG, "APDU get fingerprint parameter invalid data: " + ((data.data != null) ? data.data.length: 0));
+            return VerifyResult.ERROR;
+        }
+
+        byte[] param = new byte[0x76];
+
+        System.arraycopy(data.data, 0, param, 0, 0x76);
+
+
+
+        // set fingerprint parameter
+        if ((escape = this.device.sendEscapeCommand(message)) == null) {
+            Log.w(TAG, "Escape command set fingerprint parameter 1 failed");
+            return VerifyResult.ERROR;
+        }
+
+        if (escape.error != 0 || escape.status != 0) {
+            Log.w(TAG, "Escape command set fingerprint parameter 1 return abnormal status [" + escape.status + ":" + escape.error + "]");
+            return VerifyResult.ERROR;
+        }
+
+        if (escape.data.length != 3 || escape.data[0] != 0x00 || escape.data[1] != 0x00 || escape.data[2] != 0x00) {
+            Log.w(TAG, "Escape command set fingerprint parameter 1 invalid data: " + escape.data.length + " " + String.format("%02d %02d %02d", escape.data[0], escape.data[1], escape.data[2]));
+            return VerifyResult.ERROR;
+        }
+
+        // set parameter ??
+        message = new byte[]{(byte)0x00, (byte)0xc8, (byte)0x00};
+
+        if ((escape = this.device.sendEscapeCommand(message)) == null) {
+            Log.w(TAG, "Escape command set fingerprint parameter 2 failed");
+            return VerifyResult.ERROR;
+        }
+
+        if (escape.error != 0 || escape.status != 0) {
+            Log.w(TAG, "Escape command set fingerprint parameter 2 return abnormal status [" + escape.status + ":" + escape.error + "]");
+            return VerifyResult.ERROR;
+        }
+
+        while (i < maxRetry) {
+            //
+
+            i++;
+        }
+
+        return VerifyResult.ERROR; ///
+    }
+
 }
+

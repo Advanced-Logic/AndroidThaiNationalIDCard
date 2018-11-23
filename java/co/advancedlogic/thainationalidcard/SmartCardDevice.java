@@ -15,8 +15,9 @@ import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Set;
 
-public final class SmartCardDevice {
+public class SmartCardDevice {
     private static final String ACTION_USB_PERMISSION = "ninkoman.smartcardreader.USB_PERMISSION";
     private static final String TAG = "SmartCardDevice";
 
@@ -38,6 +39,19 @@ public final class SmartCardDevice {
     private boolean deviceDetachedRegister = false;
 
     private SmartCardDeviceEvent eventCallback = null;
+
+    private BroadcastReceiver usbStateChangeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Set<String> keys = intent.getExtras().keySet();
+
+            Log.d(TAG, "Usb State change ===");
+
+            for (String key : keys) {
+                Log.d(TAG, "key: " + key);
+            }
+        }
+    };
 
     public SmartCardDevice(Context context, UsbDevice device, int infIndex, int endpointInputIndex, int endpointOutputIndex, SmartCardDeviceEvent eventCallback) {
         if (context == null || device == null) {
@@ -128,6 +142,7 @@ public final class SmartCardDevice {
 
         for (String key : deviceList.keySet()) {
             Log.d(TAG, "Search device contain name [" + nameContain + "] in [" + deviceList.get(key).getProductName() + "] [" + deviceList.get(key).getDeviceName() + "]");
+            Log.d(TAG, "Detail ==> [" + deviceList.get(key) +"]");
             if (deviceList.get(key).getProductName().contains(nameContain)) {
                 device = deviceList.get(key);
                 Log.d(TAG, "Found device: " + device.getProductName());
@@ -188,7 +203,17 @@ public final class SmartCardDevice {
         }
         this.started = false;
 
+        this.context.unregisterReceiver(this.usbStateChangeReceiver);
+
         this.havePermission = false;
+    }
+
+    public String getDeviceProductName() {
+        if (this.device != null) {
+            return this.device.getProductName();
+        }
+
+        return "";
     }
 
     public boolean reset() {
@@ -299,10 +324,18 @@ public final class SmartCardDevice {
                                 SmartCardDevice.this.context.registerReceiver(SmartCardDevice.this.mUsbDetachedReceiver, filter);
                                 SmartCardDevice.this.deviceDetachedRegister = true;
                             }
+
+                            SmartCardDevice.this.context.unregisterReceiver(SmartCardDevice.this.mUsbPermissionReceiver);
+
+                            IntentFilter filter = new IntentFilter();
+                            filter.addAction("android.hardware.usb.action.USB_STATE");
+                            context.registerReceiver(SmartCardDevice.this.usbStateChangeReceiver, filter);
                         } else {
                             SmartCardDevice.this.havePermission = false;
                             throw new RuntimeException("Device is not granted");
                         }
+
+
                     }
                 }
             }
@@ -390,11 +423,11 @@ public final class SmartCardDevice {
 
         try {
             if ((data = this.receiveResponseMessage()) == null) {
-                Log.w(TAG, "receiveResponseMessage() error");
+                Log.w(TAG, "receiveResponseMessage() failed");
                 return null;
             }
         } catch (IOException e) {
-            Log.w(TAG, "receiveResponseMessage() failed");
+            Log.w(TAG, "receiveResponseMessage() error");
             return null;
         }
 
@@ -410,6 +443,56 @@ public final class SmartCardDevice {
         }
 
         return dataBlock;
+    }
+
+    public SmartCardMessage.EscapeResponseBlock sendEscapeCommand(byte[] dataEscape) {
+        byte[] data;
+
+        if (!this.havePermission) {
+            Log.w(TAG, "USB permission require, please call start() first");
+            return null;
+        }
+
+        byte[] message = this.message.getMessageEscapeRequest(dataEscape);
+
+        if (message == null) {
+            Log.w(TAG, "getMessageEscapeRequest() return failed");
+            return null;
+        }
+
+        if (!this.prepareConnection()) {
+            Log.w(TAG, "prepareConnection() failed");
+            return null;
+        }
+
+        if (!this.sendRequestMessage(message)) {
+            Log.w(TAG, "sendRequestMessage() error");
+            return null;
+        }
+
+        try {
+            if ((data = this.receiveResponseMessage()) == null) {
+                Log.w(TAG, "receiveResponseMessage() failed");
+                return null;
+            }
+        } catch (IOException e) {
+            Log.w(TAG, "receiveResponseMessage() error");
+            return null;
+        }
+
+        SmartCardMessage.EscapeResponseBlock response = this.message.parseEscapeResponseBlock(data);
+
+        if (response != null && response.data != null) {
+            StringBuilder sb = new StringBuilder();
+
+            for (byte b: response.data) {
+                sb.append(String.format("%02x", b));
+            }
+
+            Log.d(TAG, "Response escape data [" + sb.toString() + "]");
+        }
+
+        return response;
     }
 
     private boolean prepareConnection() {

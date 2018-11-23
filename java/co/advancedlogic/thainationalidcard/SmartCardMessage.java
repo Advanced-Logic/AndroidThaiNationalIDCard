@@ -157,8 +157,22 @@ public final class SmartCardMessage {
         return messages;
     }
 
+    public byte[] getMessageEscapeRequest(byte[] data) {
+        byte[] messages;
+
+        messages = new byte[data.length + 10];
+
+        this.initProperties(messages, 0x6b);
+        this.initMessageLength(messages, data.length);
+
+        System.arraycopy(data, 0, messages, 10, data.length);
+
+        return messages;
+    }
+
     public DataBlock parseDataBlock(byte[] data) {
         int length;
+        DataBlock dataBlock;
 
         if (data == null) {
             Log.w(TAG, "data is null");
@@ -172,17 +186,17 @@ public final class SmartCardMessage {
             return null;
         }
 
-        DataBlock dataBlock = new DataBlock();
+        dataBlock = new DataBlock();
 
-        dataBlock.status = (int)data[7];
-        dataBlock.error = (int)data[8];
-
-        length = (int)((((int)data[4] & 0xff) << 24) | (((int)data[3] & 0xff) << 16 )| (((int)data[2] & 0xff) << 8) | ((int)data[1] & 0xff));
+        length = (int)((((int)data[4] & 0xff) << 24) | (((int)data[3] & 0xff) << 16 ) | (((int)data[2] & 0xff) << 8) | ((int)data[1] & 0xff));
 
         if (data.length < length + 10) {
             Log.w(TAG, String.format("Invalid data length %d/%d", data.length, length + 10));
             return null;
         }
+
+        dataBlock.status = (int)data[7];
+        dataBlock.error = (int)data[8];
 
         if (length > 0) {
             if (data[10] == (byte)0x3b) {
@@ -201,6 +215,37 @@ public final class SmartCardMessage {
         return dataBlock;
     }
 
+    public EscapeResponseBlock parseEscapeResponseBlock(byte[] data) {
+        int length;
+        EscapeResponseBlock escapeBlock;
+
+        if (data == null) {
+            Log.w(TAG, "escape is null");
+            return null;
+        }
+
+        Log.d(TAG, "Parsing escape length " + data.length);
+
+        if (data[0] != (byte)0x83) {
+            Log.w(TAG, String.format("Invalid escape type [%02x]", (byte)data[0]));
+            return null;
+        }
+
+        length = (int)((((int)data[4] & 0xff) << 24) | (((int)data[3] & 0xff) << 16 ) | (((int)data[2] & 0xff) << 8) | ((int)data[1] & 0xff));
+
+        escapeBlock = new EscapeResponseBlock();
+
+        escapeBlock.status = data[7];
+        escapeBlock.error = data[8];
+
+        escapeBlock.data = new byte[length];
+        if (length > 0) {
+            System.arraycopy(data, 10, escapeBlock.data, 0, length);
+        }
+
+        return escapeBlock;
+    }
+
     public enum DataType {
         UNKNOWN,
         ATR,
@@ -213,5 +258,12 @@ public final class SmartCardMessage {
         public byte[] data = null;
         public int status = 0;
         public int error = 0;
+    }
+
+    public class EscapeResponseBlock {
+        public byte[] data = null;
+        public int status = 0;
+        public int error = 0;
+        public int rfu;
     }
 }
