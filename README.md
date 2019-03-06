@@ -1,7 +1,7 @@
 # AndroidThaiNationalIDCard
 Thai National ID Card library for Android application
 
-How to install?
+##### How to install?
 - create your project
 - add new module by
   -- module type 'Android Library'
@@ -9,41 +9,42 @@ How to install?
 - copy java,res directory and file AndroidManifest.xml from this project sourcecode to your project
   into directory (your library name)/src/main/
 
-How to use?
+##### How to use?
+###### use this code in button click event or somewhere after your activity is loaded.
 
-use this code in button click event or somewhere after your activity is loaded
-------
+```java
 SmartCardDevice device = SmartCardDevice.getSmartCardDevice(getApplicationContext(), "Smart Card", new SmartCardDevice.SmartCardDeviceEvent() {
-	@Override
-	public void OnReady(SmartCardDevice device) {
-		ThaiSmartCard thaiSmartCard = new ThaiSmartCard(device);
+    @Override
+    public void OnReady(SmartCardDevice device) {
+        ThaiSmartCard thaiSmartCard = new ThaiSmartCard(device);
 
-		ThaiSmartCard.PersonalInformation info = thaiSmartCard.getPersonalInformation();
+        ThaiSmartCard.PersonalInformation info = thaiSmartCard.getPersonalInformation();
 
-		if (info == null) {
-			Toast.makeText(getApplicationContext(), "Read Smart Card information failed", Toast.LENGTH_LONG).show();
-			return;
-		}
+        if (info == null) {
+            Toast.makeText(getApplicationContext(), "Read Smart Card information failed", Toast.LENGTH_LONG).show();
+            return;
+        }
 
-		Log.d("SmartCard", String.format("PID: %s NameTH: %s NameEN: %s BirthDate: %s", info.PersonalID, info.NameTH, info.NameEN, info.BirthDate));
+        Log.d("SmartCard", String.format("PID: %s NameTH: %s NameEN: %s BirthDate: %s", info.PersonalID, info.NameTH, info.NameEN, info.BirthDate));
 
-		Bitmap personalPic = thaiSmartCard.getPersonalPicture();
+        Bitmap personalPic = thaiSmartCard.getPersonalPicture();
 
-		if (personalPic == null) {
-			Toast.makeText(getApplicationContext(), "Read Smart Card personal picture failed", Toast.LENGTH_LONG).show();
-			return;
-		}
+        if (personalPic == null) {
+            Toast.makeText(getApplicationContext(), "Read Smart Card personal picture failed", Toast.LENGTH_LONG).show();
+            return;
+        }
 
-		// do something
-	}
+        // do something
+    }
 
-	@Override
-	public void OnDetached(SmartCardDevice device) {
-		Toast.makeText(getApplicationContext(), "Smart Card is removed", Toast.LENGTH_LONG).show();
-	}
+    @Override
+    public void OnDetached(SmartCardDevice device) {
+        Toast.makeText(getApplicationContext(), "Smart Card is removed", Toast.LENGTH_LONG).show();
+    }
 });
 
 if (device == null) {
-	Toast.makeText(getApplicationContext(), "Smart Card device not found", Toast.LENGTH_LONG).show();
+    Toast.makeText(getApplicationContext(), "Smart Card device not found", Toast.LENGTH_LONG).show();
 }
-------
+
+```
