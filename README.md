@@ -3,11 +3,9 @@ Thai National ID Card library for Android application
 
 ##### How to install?
 - create your project
-- add new module by
-  -- module type 'Android Library'
-  -- module package name 'co.advancedlogic.thainationalidcard'
+- add new module by module type 'Android Library' and module package name 'co.advancedlogic.thainationalidcard'
 - copy java,res directory and file AndroidManifest.xml from this project sourcecode to your project
-  into directory (your library name)/src/main/
+  into directory (new module name)/src/main/
 
 ##### How to use?
 ###### use this code in button click event or somewhere after your activity is loaded.
