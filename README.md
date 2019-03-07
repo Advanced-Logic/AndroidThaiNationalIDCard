@@ -8,7 +8,7 @@ Thai National ID Card library for Android application
   into directory (new module name)/src/main/
 
 ##### How to use?
-###### use this code in button click event or somewhere after your activity is loaded.
+###### use this example code in button click event or somewhere after your activity is loaded.
 
 ```java
 SmartCardDevice device = SmartCardDevice.getSmartCardDevice(getApplicationContext(), "Smart Card", new SmartCardDevice.SmartCardDeviceEvent() {
