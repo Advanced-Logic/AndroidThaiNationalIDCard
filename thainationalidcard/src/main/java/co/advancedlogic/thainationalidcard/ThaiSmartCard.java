@@ -516,7 +516,7 @@ public final class ThaiSmartCard {
             ivParam = new IvParameterSpec(iv);
 
             try {
-                cipher = Cipher.getInstance("DESede/CBC/PKCS5Padding");
+                cipher = Cipher.getInstance("DESede/CBC/NoPadding");
             } catch (NoSuchPaddingException e) {
                 Log.w(TAG, "NoSuchPaddingException");
                 return false;
