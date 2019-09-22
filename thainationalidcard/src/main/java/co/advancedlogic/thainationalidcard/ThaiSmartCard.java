@@ -545,7 +545,14 @@ public final class ThaiSmartCard {
                 return false;
             }
 
-            System.arraycopy(answerData, 0, inputData, 0, answerData.length);
+            if (answerData.length == 32){
+                System.arraycopy(answerData, 0, inputData, 0, 0x20);
+            } else if (answerData.length == 40) {
+                System.arraycopy(answerData, 8, inputData, 0, 0x20);
+            } else {
+                Log.w(TAG, "Invalid cipher caculate");
+                return false;
+            }
         }
 
         message = new byte[]{(byte)0x80, (byte)0x20, (byte)0x01, (byte)0x00, (byte)0x20,

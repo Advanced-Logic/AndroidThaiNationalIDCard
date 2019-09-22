@@ -14,7 +14,7 @@ Thai National ID Card library for Android application
 - Add the dependency
 ```
   dependencies {
-    implementation 'com.github.Advanced-Logic:AndroidThaiNationalIDCard:1.0.2'
+    implementation 'com.github.Advanced-Logic:AndroidThaiNationalIDCard:1.0.3'
   }
 ```
 ##### How to use?
